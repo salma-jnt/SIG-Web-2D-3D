@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SIG EHTP - Visualisation Géospatiale 2D/3D</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol/ol.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet" />
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Widgets/widgets.css"
+        rel="stylesheet" />
+    <style>
+        :root {
+            --primary-color: #e54656;
+            --secondary-color: #ed3a64;
+            --background-light: #f8fafc;
+            --gray-border: #e5e7eb;
+            --gray-text: #4b5563;
+            --button-bg: linear-gradient(135deg, #e5465b, #ed3a40);
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--background-light);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .top-menu {
+            background: var(--primary-color);
+            color: white;
+            padding: 1rem 2rem;
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: 500;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            height: calc(100% - 64px);
+            /* ajustement hauteur */
+        }
+
+        .sidebar {
+            width: 300px;
+            background-color: white;
+            padding: 20px;
+            border-right: 1px solid var(--gray-border);
+            overflow-y: auto;
+        }
+
+        .toolbar h3 {
+            font-size: 18px;
+            margin-bottom: 1rem;
+            color: var(--primary-color);
+        }
+
+        .toolbar label {
+            display: block;
+            margin-bottom: 10px;
+            color: var(--gray-text);
+        }
+
+        .toolbar button,
+        #search-btn,
+        #spatial-query-btn,
+        #export-png,
+        #export-pdf,
+        #export-geojson,
+        #export-shp {
+            width: 100%;
+            padding: 10px;
+            background: var(--button-bg);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 10px;
+            font-weight: 500;
+            transition: transform 0.2s ease;
+        }
+
+        .toolbar button:hover {
+            transform: scale(1.02);
+        }
+
+        .toolbar input,
+        .toolbar select {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid var(--gray-border);
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .map-container {
+            flex: 1;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 20px;
+            gap: 20px;
+            background-color: #f9fafb;
+        }
+
+        #map2d,
+        #map3d {
+            flex: 1;
+            height: 80vh;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        #popup2d {
+            position: absolute;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--gray-border);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            font-size: 14px;
+            max-width: 300px;
+            z-index: 1000;
+        }
+
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 18px;
+            z-index: 2000;
+        }
+
+        #measurementDisplay {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 10px 20px;
+            border: 1px solid var(--gray-border);
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+            z-index: 2000;
+            display: none;
+            font-size: 14px;
+            color: var(--gray-text);
+        }
+
+        #measurementDisplay button {
+            margin-left: 20px;
+            padding: 5px 10px;
+            border-radius: 5px;
+            border: none;
+            background: #ef4444;
+            color: white;
+            cursor: pointer;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
+        document.getElementById("export-png").addEventListener("click", () => {
+            map2d.once("rendercomplete", () => {
+                const canvas = document.createElement("canvas");
+                const size = map2d.getSize();
+                canvas.width = size[0];
+                canvas.height = size[1];
+                const context = canvas.getContext("2d");
+
+                Array.prototype.forEach.call(
+                    map2d.getViewport().querySelectorAll(".ol-layer canvas"),
+                    (layerCanvas) => {
+                        if (layerCanvas.width > 0) {
+                            context.drawImage(layerCanvas, 0, 0);
+                        }
+                    }
+                );
+
+                const link = document.createElement("a");
+                link.href = canvas.toDataURL("image/png");
+                link.download = "carte_sig_ehtp.png";
+                link.click();
+            });
+            map2d.renderSync();
+        });
+
+        document.getElementById("export-pdf").addEventListener("click", async () => {
+            map2d.once("rendercomplete", () => {
+                const canvas = document.createElement("canvas");
+                const size = map2d.getSize();
+                canvas.width = size[0];
+                canvas.height = size[1];
+                const context = canvas.getContext("2d");
+
+                Array.prototype.forEach.call(
+                    map2d.getViewport().querySelectorAll(".ol-layer canvas"),
+                    (layerCanvas) => {
+                        if (layerCanvas.width > 0) {
+                            context.drawImage(layerCanvas, 0, 0);
+                        }
+                    }
+                );
+
+                const imageData = canvas.toDataURL("image/jpeg", 1.0);
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({ orientation: "landscape" });
+                pdf.addImage(imageData, "JPEG", 10, 10, 270, 180);
+                pdf.save("carte_sig_ehtp.pdf");
+            });
+            map2d.renderSync();
+        });
+
+        document.getElementById("export-geojson").addEventListener("click", () => {
+            const features = measurementSource.getFeatures();
+            const geojson = new ol.format.GeoJSON().writeFeatures(features);
+            const blob = new Blob([geojson], { type: "application/json" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "mesures.geojson";
+            link.click();
+        });
+
+        document.getElementById("export-shp").addEventListener("click", () => {
+            const features = measurementSource.getFeatures();
+            const geojson = new ol.format.GeoJSON().writeFeaturesObject(features);
+            shpwrite.download(geojson, {
+                folder: "mesures",
+                types: { point: "points", polygon: "polygones", line: "lignes" }
+            });
+        });
+
+
+        // === Couche résultat requête ===
+        resultSource = new ol.source.Vector();
+        resultLayer = new ol.layer.Vector({
+            source: resultSource,
+            style: new ol.style.Style({
+                stroke: new ol.style.Stroke({ color: 'orange', width: 3 }),
+                fill: new ol.style.Fill({ color: 'rgba(255,165,0,0.2)' })
+            })
+        });
+        map2d.addLayer(resultLayer);
+
+        // === Requête attributaire ===
+        document.getElementById('search-btn').addEventListener('click', () => {
+            const value = document.getElementById('search-input').value.trim();
+            if (!value) return;
+
+            const url = `${config.geoserverUrl.replace('/wms', '/wfs')}?service=WFS&version=1.1.0&request=GetFeature&typeName=ehtp:Batiments&outputFormat=application/json&CQL_FILTER=Nom ILIKE '%25${value}%25'`;
+
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    const format = new ol.format.GeoJSON();
+                    const features = format.readFeatures(data, {
+                        featureProjection: config.projection
+                    });
+                    resultSource.clear();
+                    resultSource.addFeatures(features);
+                    if (features.length > 0) {
+                        const extent = resultSource.getExtent();
+                        map2d.getView().fit(extent, { duration: 1000 });
+                    } else {
+                        alert("Aucun résultat trouvé.");
+                    }
+                });
+        });
+
+        // === Requête spatiale ===
+        spatialDraw;
+
+        document.getElementById('spatial-query-btn').addEventListener('click', () => {
+            if (spatialDraw) map2d.removeInteraction(spatialDraw);
+
+            spatialDraw = new ol.interaction.Draw({
+                source: new ol.source.Vector(),
+                type: 'Polygon'
+            });
+
+            map2d.addInteraction(spatialDraw);
+
+            spatialDraw.on('drawend', (e) => {
+                map2d.removeInteraction(spatialDraw);
+                const geom = e.feature.getGeometry().clone().transform(config.projection, 'EPSG:4326');
+                const wkt = new ol.format.WKT().writeGeometry(geom);
+
+                const url = `${config.geoserverUrl.replace('/wms', '/wfs')}?service=WFS&version=1.1.0&request=GetFeature&typeName=ehtp:Batiments&outputFormat=application/json&CQL_FILTER=INTERSECTS(geometry, ${wkt})`;
+
+                fetch(url)
+                    .then(res => res.json())
+                    .then(data => {
+                        const format = new ol.format.GeoJSON();
+                        const features = format.readFeatures(data, {
+                            featureProjection: config.projection
+                        });
+                        resultSource.clear();
+                        resultSource.addFeatures(features);
+                        if (features.length > 0) {
+                            const extent = resultSource.getExtent();
+                            map2d.getView().fit(extent, { duration: 1000 });
+                        } else {
+                            alert("Aucun objet trouvé.");
+                        }
+                    });
+            });
+        });
+
+    </script>
+    <script src="https://unpkg.com/shp-write@latest/shpwrite.js">
+        document.getElementById("export-png").addEventListener("click", () => {
+            map2d.once("rendercomplete", () => {
+                const canvas = document.createElement("canvas");
+                const size = map2d.getSize();
+                canvas.width = size[0];
+                canvas.height = size[1];
+                const context = canvas.getContext("2d");
+
+                Array.prototype.forEach.call(
+                    map2d.getViewport().querySelectorAll(".ol-layer canvas"),
+                    (layerCanvas) => {
+                        if (layerCanvas.width > 0) {
+                            context.drawImage(layerCanvas, 0, 0);
+                        }
+                    }
+                );
+
+                const link = document.createElement("a");
+                link.href = canvas.toDataURL("image/png");
+                link.download = "carte_sig_ehtp.png";
+                link.click();
+            });
+            map2d.renderSync();
+        });
+
+        document.getElementById("export-pdf").addEventListener("click", async () => {
+            map2d.once("rendercomplete", () => {
+                const canvas = document.createElement("canvas");
+                const size = map2d.getSize();
+                canvas.width = size[0];
+                canvas.height = size[1];
+                const context = canvas.getContext("2d");
+
+                Array.prototype.forEach.call(
+                    map2d.getViewport().querySelectorAll(".ol-layer canvas"),
+                    (layerCanvas) => {
+                        if (layerCanvas.width > 0) {
+                            context.drawImage(layerCanvas, 0, 0);
+                        }
+                    }
+                );
+
+                const imageData = canvas.toDataURL("image/jpeg", 1.0);
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({ orientation: "landscape" });
+                pdf.addImage(imageData, "JPEG", 10, 10, 270, 180);
+                pdf.save("carte_sig_ehtp.pdf");
+            });
+            map2d.renderSync();
+        });
+
+        document.getElementById("export-geojson").addEventListener("click", () => {
+            const features = measurementSource.getFeatures();
+            const geojson = new ol.format.GeoJSON().writeFeatures(features);
+            const blob = new Blob([geojson], { type: "application/json" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "mesures.geojson";
+            link.click();
+        });
+
+        document.getElementById("export-shp").addEventListener("click", () => {
+            const features = measurementSource.getFeatures();
+            const geojson = new ol.format.GeoJSON().writeFeaturesObject(features);
+            shpwrite.download(geojson, {
+                folder: "mesures",
+                types: { point: "points", polygon: "polygones", line: "lignes" }
+            });
+        });
+
+
+        // === Couche résultat requête ===
+        resultSource = new ol.source.Vector();
+        resultLayer = new ol.layer.Vector({
+            source: resultSource,
+            style: new ol.style.Style({
+                stroke: new ol.style.Stroke({ color: 'orange', width: 3 }),
+                fill: new ol.style.Fill({ color: 'rgba(255,165,0,0.2)' })
+            })
+        });
+        map2d.addLayer(resultLayer);
+
+        // === Requête attributaire ===
+        document.getElementById('search-btn').addEventListener('click', () => {
+            const value = document.getElementById('search-input').value.trim();
+            if (!value) return;
+
+            const url = `${config.geoserverUrl.replace('/wms', '/wfs')}?service=WFS&version=1.1.0&request=GetFeature&typeName=ehtp:Batiments&outputFormat=application/json&CQL_FILTER=Nom ILIKE '%25${value}%25'`;
+
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    const format = new ol.format.GeoJSON();
+                    const features = format.readFeatures(data, {
+                        featureProjection: config.projection
+                    });
+                    resultSource.clear();
+                    resultSource.addFeatures(features);
+                    if (features.length > 0) {
+                        const extent = resultSource.getExtent();
+                        map2d.getView().fit(extent, { duration: 1000 });
+                    } else {
+                        alert("Aucun résultat trouvé.");
+                    }
+                });
+        });
+
+        // === Requête spatiale ===
+        spatialDraw;
+
+        document.getElementById('spatial-query-btn').addEventListener('click', () => {
+            if (spatialDraw) map2d.removeInteraction(spatialDraw);
+
+            spatialDraw = new ol.interaction.Draw({
+                source: new ol.source.Vector(),
+                type: 'Polygon'
+            });
+
+            map2d.addInteraction(spatialDraw);
+
+            spatialDraw.on('drawend', (e) => {
+                map2d.removeInteraction(spatialDraw);
+                const geom = e.feature.getGeometry().clone().transform(config.projection, 'EPSG:4326');
+                const wkt = new ol.format.WKT().writeGeometry(geom);
+
+                const url = `${config.geoserverUrl.replace('/wms', '/wfs')}?service=WFS&version=1.1.0&request=GetFeature&typeName=ehtp:Batiments&outputFormat=application/json&CQL_FILTER=INTERSECTS(geometry, ${wkt})`;
+
+                fetch(url)
+                    .then(res => res.json())
+                    .then(data => {
+                        const format = new ol.format.GeoJSON();
+                        const features = format.readFeatures(data, {
+                            featureProjection: config.projection
+                        });
+                        resultSource.clear();
+                        resultSource.addFeatures(features);
+                        if (features.length > 0) {
+                            const extent = resultSource.getExtent();
+                            map2d.getView().fit(extent, { duration: 1000 });
+                        } else {
+                            alert("Aucun objet trouvé.");
+                        }
+                    });
+            });
+        });
+
+    </script>
+</head>
+
+<body>
+    <header class="top-menu">
+        <h1>SIG EHTP - Visualisation Géospatiale 2D/3D</h1>
+    </header>
+    <div class="main-container">
+        <aside class="sidebar left-sidebar">
+            <div class="toolbar">
+                <h3>Contrôle des Couches</h3>
+                <label><input type="checkbox" class="layer-toggle" data-layer="Direction" checked> Direction</label>
+                <label><input type="checkbox" class="layer-toggle" data-layer="Batiments" checked> Bâtiments</label>
+                <label><input type="checkbox" class="layer-toggle" data-layer="Centre_Conference" checked> Centre
+                    Conf.</label>
+                <label><input type="checkbox" class="layer-toggle" data-layer="Classes_Départements" checked>
+                    Départements</label>
+                <label><input type="checkbox" class="layer-toggle" data-layer="Espaces_Verts" checked> Espaces
+                    verts</label>
+                <label><input type="checkbox" class="layer-toggle" data-layer="Laboratoires" checked>
+                    Laboratoires</label>
+                <label><input type="checkbox" class="layer-toggle" data-layer="Mosquée" checked> Mosquée</label>
+                <label><input type="checkbox" class="layer-toggle" data-layer="Parking" checked> Parking</label>
+                <label><input type="checkbox" class="layer-toggle" data-layer="Restaurant" checked> Restaurant</label>
+                <label><input type="checkbox" class="layer-toggle" data-layer="SalleEtude" checked> Salle Étude</label>
+                <label><input type="checkbox" class="layer-toggle" data-layer="Terrains" checked> Terrains</label>
+                <label><input type="checkbox" class="layer-toggle" data-layer="Voirie" checked> Voirie</label>
+                <hr>
+                <button id="measure-distance">Mesurer Distance</button>
+                <button id="measure-area">Mesurer Surface</button>
+                <hr>
+                <select id="layer-select">
+                    <option value="">-- Sélectionner une couche --</option>
+                    <option value="Batiments">Batiments</option>
+                    <option value="Direction">Direction</option>
+                    <option value="Centre_Conference">Centre_Conference</option>
+                    <option value="Classes_Départements">Classes_Départements</option>
+                    <option value="Espaces_Verts">Espaces_Verts</option>
+                    <option value="Laboratoires">Laboratoires</option>
+                    <option value="Mosquée">Mosquée</option>
+                    <option value="Parking">Parking</option>
+                    <option value="Restaurant">Restaurant</option>
+                    <option value="SalleEtude">SalleEtude</option>
+                    <option value="Terrains">Terrains</option>
+                    <option value="Voirie">Voirie</option>
+                </select>
+                <input type="text" id="search-input" placeholder="Rechercher par nom" />
+                <button id="search-btn">🔍 Requête attributaire</button>
+                <button id="spatial-query-btn">📐 Requête spatiale</button>
+                <hr>
+                <button id="export-png"><i class="fas fa-image"></i> Export PNG</button>
+                <button id="export-pdf"><i class="fas fa-file-pdf"></i> Export PDF</button>
+                <button id="export-geojson"><i class="fas fa-code"></i> Export GeoJSON</button>
+                <button id="export-shp"><i class="fas fa-file-archive"></i> Export SHP</button>
+            </div>
+        </aside>
+        <div class="map-container">
+            <div id="map2d"></div>
+            <div id="map3d"></div>
+        </div>
+    </div>
+    <div id="popup2d" class="hidden"></div>
+    <div id="loading-overlay">
+        <p>Chargement de la vue 3D...</p>
+    </div>
+    <div id="measurementDisplay">
+        <span id="measurementText">Mesure :</span>
+        <button onclick="clearMeasurements()">Effacer</button>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js">
+        document.getElementById("export-png").addEventListener("click", () => {
+            map2d.once("rendercomplete", () => {
+                const canvas = document.createElement("canvas");
+                const size = map2d.getSize();
+                canvas.width = size[0];
+                canvas.height = size[1];
+                const context = canvas.getContext("2d");
+
+                Array.prototype.forEach.call(
+                    map2d.getViewport().querySelectorAll(".ol-layer canvas"),
+                    (layerCanvas) => {
+                        if (layerCanvas.width > 0) {
+                            context.drawImage(layerCanvas, 0, 0);
+                        }
+                    }
+                );
+
+                const link = document.createElement("a");
+                link.href = canvas.toDataURL("image/png");
+                link.download = "carte_sig_ehtp.png";
+                link.click();
+            });
+            map2d.renderSync();
+        });
+
+        document.getElementById("export-pdf").addEventListener("click", async () => {
+            map2d.once("rendercomplete", () => {
+                const canvas = document.createElement("canvas");
+                const size = map2d.getSize();
+                canvas.width = size[0];
+                canvas.height = size[1];
+                const context = canvas.getContext("2d");
+
+                Array.prototype.forEach.call(
+                    map2d.getViewport().querySelectorAll(".ol-layer canvas"),
+                    (layerCanvas) => {
+                        if (layerCanvas.width > 0) {
+                            context.drawImage(layerCanvas, 0, 0);
+                        }
+                    }
+                );
+
+                const imageData = canvas.toDataURL("image/jpeg", 1.0);
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({ orientation: "landscape" });
+                pdf.addImage(imageData, "JPEG", 10, 10, 270, 180);
+                pdf.save("carte_sig_ehtp.pdf");
+            });
+            map2d.renderSync();
+        });
+
+        document.getElementById("export-geojson").addEventListener("click", () => {
+            const features = measurementSource.getFeatures();
+            const geojson = new ol.format.GeoJSON().writeFeatures(features);
+            const blob = new Blob([geojson], { type: "application/json" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "mesures.geojson";
+            link.click();
+        });
+
+        document.getElementById("export-shp").addEventListener("click", () => {
+            const features = measurementSource.getFeatures();
+            const geojson = new ol.format.GeoJSON().writeFeaturesObject(features);
+            shpwrite.download(geojson, {
+                folder: "mesures",
+                types: { point: "points", polygon: "polygones", line: "lignes" }
+            });
+        });
+
+
+        // === Couche résultat requête ===
+        resultSource = new ol.source.Vector();
+        resultLayer = new ol.layer.Vector({
+            source: resultSource,
+            style: new ol.style.Style({
+                stroke: new ol.style.Stroke({ color: 'orange', width: 3 }),
+                fill: new ol.style.Fill({ color: 'rgba(255,165,0,0.2)' })
+            })
+        });
+        map2d.addLayer(resultLayer);
+
+        // === Requête attributaire ===
+        document.getElementById('search-btn').addEventListener('click', () => {
+            const value = document.getElementById('search-input').value.trim();
+            if (!value) return;
+
+            const url = `${config.geoserverUrl.replace('/wms', '/wfs')}?service=WFS&version=1.1.0&request=GetFeature&typeName=ehtp:Batiments&outputFormat=application/json&CQL_FILTER=Nom ILIKE '%25${value}%25'`;
+
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    const format = new ol.format.GeoJSON();
+                    const features = format.readFeatures(data, {
+                        featureProjection: config.projection
+                    });
+                    resultSource.clear();
+                    resultSource.addFeatures(features);
+                    if (features.length > 0) {
+                        const extent = resultSource.getExtent();
+                        map2d.getView().fit(extent, { duration: 1000 });
+                    } else {
+                        alert("Aucun résultat trouvé.");
+                    }
+                });
+        });
+
+        // === Requête spatiale ===
+        spatialDraw;
+
+        document.getElementById('spatial-query-btn').addEventListener('click', () => {
+            if (spatialDraw) map2d.removeInteraction(spatialDraw);
+
+            spatialDraw = new ol.interaction.Draw({
+                source: new ol.source.Vector(),
+                type: 'Polygon'
+            });
+
+            map2d.addInteraction(spatialDraw);
+
+            spatialDraw.on('drawend', (e) => {
+                map2d.removeInteraction(spatialDraw);
+                const geom = e.feature.getGeometry().clone().transform(config.projection, 'EPSG:4326');
+                const wkt = new ol.format.WKT().writeGeometry(geom);
+
+                const url = `${config.geoserverUrl.replace('/wms', '/wfs')}?service=WFS&version=1.1.0&request=GetFeature&typeName=ehtp:Batiments&outputFormat=application/json&CQL_FILTER=INTERSECTS(geometry, ${wkt})`;
+
+                fetch(url)
+                    .then(res => res.json())
+                    .then(data => {
+                        const format = new ol.format.GeoJSON();
+                        const features = format.readFeatures(data, {
+                            featureProjection: config.projection
+                        });
+                        resultSource.clear();
+                        resultSource.addFeatures(features);
+                        if (features.length > 0) {
+                            const extent = resultSource.getExtent();
+                            map2d.getView().fit(extent, { duration: 1000 });
+                        } else {
+                            alert("Aucun objet trouvé.");
+                        }
+                    });
+            });
+        });
+
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/ol@7.3.0/dist/ol.js">
+        document.getElementById("export-png").addEventListener("click", () => {
+            map2d.once("rendercomplete", () => {
+                const canvas = document.createElement("canvas");
+                const size = map2d.getSize();
+                canvas.width = size[0];
+                canvas.height = size[1];
+                const context = canvas.getContext("2d");
+
+                Array.prototype.forEach.call(
+                    map2d.getViewport().querySelectorAll(".ol-layer canvas"),
+                    (layerCanvas) => {
+                        if (layerCanvas.width > 0) {
+                            context.drawImage(layerCanvas, 0, 0);
+                        }
+                    }
+                );
+
+                const link = document.createElement("a");
+                link.href = canvas.toDataURL("image/png");
+                link.download = "carte_sig_ehtp.png";
+                link.click();
+            });
+            map2d.renderSync();
+        });
+
+        document.getElementById("export-pdf").addEventListener("click", async () => {
+            map2d.once("rendercomplete", () => {
+                const canvas = document.createElement("canvas");
+                const size = map2d.getSize();
+                canvas.width = size[0];
+                canvas.height = size[1];
+                const context = canvas.getContext("2d");
+
+                Array.prototype.forEach.call(
+                    map2d.getViewport().querySelectorAll(".ol-layer canvas"),
+                    (layerCanvas) => {
+                        if (layerCanvas.width > 0) {
+                            context.drawImage(layerCanvas, 0, 0);
+                        }
+                    }
+                );
+
+                const imageData = canvas.toDataURL("image/jpeg", 1.0);
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({ orientation: "landscape" });
+                pdf.addImage(imageData, "JPEG", 10, 10, 270, 180);
+                pdf.save("carte_sig_ehtp.pdf");
+            });
+            map2d.renderSync();
+        });
+
+        document.getElementById("export-geojson").addEventListener("click", () => {
+            const features = measurementSource.getFeatures();
+            const geojson = new ol.format.GeoJSON().writeFeatures(features);
+            const blob = new Blob([geojson], { type: "application/json" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "mesures.geojson";
+            link.click();
+        });
+
+        document.getElementById("export-shp").addEventListener("click", () => {
+            const features = measurementSource.getFeatures();
+            const geojson = new ol.format.GeoJSON().writeFeaturesObject(features);
+            shpwrite.download(geojson, {
+                folder: "mesures",
+                types: { point: "points", polygon: "polygones", line: "lignes" }
+            });
+        });
+
+
+        // === Couche résultat requête ===
+        resultSource = new ol.source.Vector();
+        resultLayer = new ol.layer.Vector({
+            source: resultSource,
+            style: new ol.style.Style({
+                stroke: new ol.style.Stroke({ color: 'orange', width: 3 }),
+                fill: new ol.style.Fill({ color: 'rgba(255,165,0,0.2)' })
+            })
+        });
+        map2d.addLayer(resultLayer);
+
+        // === Requête attributaire ===
+        document.getElementById('search-btn').addEventListener('click', () => {
+            const value = document.getElementById('search-input').value.trim();
+            if (!value) return;
+
+            const url = `${config.geoserverUrl.replace('/wms', '/wfs')}?service=WFS&version=1.1.0&request=GetFeature&typeName=ehtp:Batiments&outputFormat=application/json&CQL_FILTER=Nom ILIKE '%25${value}%25'`;
+
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    const format = new ol.format.GeoJSON();
+                    const features = format.readFeatures(data, {
+                        featureProjection: config.projection
+                    });
+                    resultSource.clear();
+                    resultSource.addFeatures(features);
+                    if (features.length > 0) {
+                        const extent = resultSource.getExtent();
+                        map2d.getView().fit(extent, { duration: 1000 });
+                    } else {
+                        alert("Aucun résultat trouvé.");
+                    }
+                });
+        });
+
+        // === Requête spatiale ===
+        spatialDraw;
+
+        document.getElementById('spatial-query-btn').addEventListener('click', () => {
+            if (spatialDraw) map2d.removeInteraction(spatialDraw);
+
+            spatialDraw = new ol.interaction.Draw({
+                source: new ol.source.Vector(),
+                type: 'Polygon'
+            });
+
+            map2d.addInteraction(spatialDraw);
+
+            spatialDraw.on('drawend', (e) => {
+                map2d.removeInteraction(spatialDraw);
+                const geom = e.feature.getGeometry().clone().transform(config.projection, 'EPSG:4326');
+                const wkt = new ol.format.WKT().writeGeometry(geom);
+
+                const url = `${config.geoserverUrl.replace('/wms', '/wfs')}?service=WFS&version=1.1.0&request=GetFeature&typeName=ehtp:Batiments&outputFormat=application/json&CQL_FILTER=INTERSECTS(geometry, ${wkt})`;
+
+                fetch(url)
+                    .then(res => res.json())
+                    .then(data => {
+                        const format = new ol.format.GeoJSON();
+                        const features = format.readFeatures(data, {
+                            featureProjection: config.projection
+                        });
+                        resultSource.clear();
+                        resultSource.addFeatures(features);
+                        if (features.length > 0) {
+                            const extent = resultSource.getExtent();
+                            map2d.getView().fit(extent, { duration: 1000 });
+                        } else {
+                            alert("Aucun objet trouvé.");
+                        }
+                    });
+            });
+        });
+
+    </script>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Cesium.js">
+        document.getElementById("export-png").addEventListener("click", () => {
+            map2d.once("rendercomplete", () => {
+                const canvas = document.createElement("canvas");
+                const size = map2d.getSize();
+                canvas.width = size[0];
+                canvas.height = size[1];
+                const context = canvas.getContext("2d");
+
+                Array.prototype.forEach.call(
+                    map2d.getViewport().querySelectorAll(".ol-layer canvas"),
+                    (layerCanvas) => {
+                        if (layerCanvas.width > 0) {
+                            context.drawImage(layerCanvas, 0, 0);
+                        }
+                    }
+                );
+
+                const link = document.createElement("a");
+                link.href = canvas.toDataURL("image/png");
+                link.download = "carte_sig_ehtp.png";
+                link.click();
+            });
+            map2d.renderSync();
+        });
+
+        document.getElementById("export-pdf").addEventListener("click", async () => {
+            map2d.once("rendercomplete", () => {
+                const canvas = document.createElement("canvas");
+                const size = map2d.getSize();
+                canvas.width = size[0];
+                canvas.height = size[1];
+                const context = canvas.getContext("2d");
+
+                Array.prototype.forEach.call(
+                    map2d.getViewport().querySelectorAll(".ol-layer canvas"),
+                    (layerCanvas) => {
+                        if (layerCanvas.width > 0) {
+                            context.drawImage(layerCanvas, 0, 0);
+                        }
+                    }
+                );
+
+                const imageData = canvas.toDataURL("image/jpeg", 1.0);
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({ orientation: "landscape" });
+                pdf.addImage(imageData, "JPEG", 10, 10, 270, 180);
+                pdf.save("carte_sig_ehtp.pdf");
+            });
+            map2d.renderSync();
+        });
+
+        document.getElementById("export-geojson").addEventListener("click", () => {
+            const features = measurementSource.getFeatures();
+            const geojson = new ol.format.GeoJSON().writeFeatures(features);
+            const blob = new Blob([geojson], { type: "application/json" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "mesures.geojson";
+            link.click();
+        });
+
+        document.getElementById("export-shp").addEventListener("click", () => {
+            const features = measurementSource.getFeatures();
+            const geojson = new ol.format.GeoJSON().writeFeaturesObject(features);
+            shpwrite.download(geojson, {
+                folder: "mesures",
+                types: { point: "points", polygon: "polygones", line: "lignes" }
+            });
+        });
+
+
+        // === Couche résultat requête ===
+        resultSource = new ol.source.Vector();
+        resultLayer = new ol.layer.Vector({
+            source: resultSource,
+            style: new ol.style.Style({
+                stroke: new ol.style.Stroke({ color: 'orange', width: 3 }),
+                fill: new ol.style.Fill({ color: 'rgba(255,165,0,0.2)' })
+            })
+        });
+        map2d.addLayer(resultLayer);
+
+        // === Requête attributaire ===
+        document.getElementById('search-btn').addEventListener('click', () => {
+            const value = document.getElementById('search-input').value.trim();
+            if (!value) return;
+
+            const url = `${config.geoserverUrl.replace('/wms', '/wfs')}?service=WFS&version=1.1.0&request=GetFeature&typeName=ehtp:Batiments&outputFormat=application/json&CQL_FILTER=Nom ILIKE '%25${value}%25'`;
+
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    const format = new ol.format.GeoJSON();
+                    const features = format.readFeatures(data, {
+                        featureProjection: config.projection
+                    });
+                    resultSource.clear();
+                    resultSource.addFeatures(features);
+                    if (features.length > 0) {
+                        const extent = resultSource.getExtent();
+                        map2d.getView().fit(extent, { duration: 1000 });
+                    } else {
+                        alert("Aucun résultat trouvé.");
+                    }
+                });
+        });
+
+        // === Requête spatiale ===
+        spatialDraw;
+
+        document.getElementById('spatial-query-btn').addEventListener('click', () => {
+            if (spatialDraw) map2d.removeInteraction(spatialDraw);
+
+            spatialDraw = new ol.interaction.Draw({
+                source: new ol.source.Vector(),
+                type: 'Polygon'
+            });
+
+            map2d.addInteraction(spatialDraw);
+
+            spatialDraw.on('drawend', (e) => {
+                map2d.removeInteraction(spatialDraw);
+                const geom = e.feature.getGeometry().clone().transform(config.projection, 'EPSG:4326');
+                const wkt = new ol.format.WKT().writeGeometry(geom);
+
+                const url = `${config.geoserverUrl.replace('/wms', '/wfs')}?service=WFS&version=1.1.0&request=GetFeature&typeName=ehtp:Batiments&outputFormat=application/json&CQL_FILTER=INTERSECTS(geometry, ${wkt})`;
+
+                fetch(url)
+                    .then(res => res.json())
+                    .then(data => {
+                        const format = new ol.format.GeoJSON();
+                        const features = format.readFeatures(data, {
+                            featureProjection: config.projection
+                        });
+                        resultSource.clear();
+                        resultSource.addFeatures(features);
+                        if (features.length > 0) {
+                            const extent = resultSource.getExtent();
+                            map2d.getView().fit(extent, { duration: 1000 });
+                        } else {
+                            alert("Aucun objet trouvé.");
+                        }
+                    });
+            });
+        });
+
+    </script>
+    <script>
+        const config = {
+            geoserverUrl: 'http://localhost:8080/geoserver/ehtp/wms',
+            layers: [],
+            projection: 'EPSG:4326',
+            bbox: [-7.6533, 33.5459, -7.6476, 33.5499],
+            cesiumToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjOTg5M2IzYS01YzU4LTQ4NGUtYjdlOS0wMDY5NzFmZDMwNTQiLCJpZCI6MzA2NTEzLCJpYXQiOjE3NDgyOTU3MjB9.XqZNV3k4jxdBUjGO57BjWCLFSuiH4g8_dtJNCoUSEjs'
+        };
+
+        proj4.defs(config.projection, "+proj=longlat +datum=WGS84 +no_defs");
+        ol.proj.proj4.register(proj4);
+        const measurementSource = new ol.source.Vector();
+        const measurementLayer = new ol.layer.Vector({ source: measurementSource });
+
+        const map2d = new ol.Map({
+            target: 'map2d',
+            layers: [new ol.layer.Tile({ source: new ol.source.OSM() }), measurementLayer],
+            view: new ol.View({
+                projection: config.projection,
+                center: ol.extent.getCenter(config.bbox),
+                zoom: 18
+            })
+        });
+
+        const layerMap = {};
+        const layerNames = ['Direction', 'Batiments', 'Centre_Conference', 'Classes_Départements', 'Espaces_Verts', 'Laboratoires', 'Mosquée', 'Parking', 'Restaurant', 'SalleEtude', 'Terrains', 'Voirie'];
+        layerNames.forEach(name => {
+            const lyr = new ol.layer.Tile({
+                source: new ol.source.TileWMS({
+                    url: config.geoserverUrl,
+                    params: { 'LAYERS': `ehtp:${name}`, 'TILED': true, 'TRANSPARENT': true, 'FORMAT': 'image/png' },
+                    serverType: 'geoserver',
+                    crossOrigin: 'anonymous'
+                })
+            });
+            layerMap[name] = lyr;
+            map2d.addLayer(lyr);
+        });
+
+        document.querySelectorAll('.layer-toggle').forEach(input => {
+            input.addEventListener('change', () => {
+                const name = input.dataset.layer;
+                if (layerMap[name]) layerMap[name].setVisible(input.checked);
+            });
+        });
+
+        const popup2d = document.getElementById('popup2d');
+        const overlay2d = new ol.Overlay({ element: popup2d, autoPan: true, offset: [0, -10], positioning: 'bottom-center' });
+        map2d.addOverlay(overlay2d);
+
+        map2d.on('singleclick', function (evt) {
+            const resolution = map2d.getView().getResolution();
+            let shown = false;
+            map2d.getLayers().forEach(layer => {
+                if (layer instanceof ol.layer.Tile && layer.getVisible()) {
+                    const source = layer.getSource();
+                    if (source instanceof ol.source.TileWMS) {
+                        const url = source.getFeatureInfoUrl(evt.coordinate, resolution, config.projection, { INFO_FORMAT: 'application/json' });
+                        if (url) {
+                            fetch(url).then(r => r.json()).then(data => {
+                                if (data.features.length > 0 && !shown) {
+                                    const props = data.features[0].properties;
+                                    popup2d.innerHTML = Object.entries(props).map(([k, v]) => `<b>${k}</b>: ${v}`).join("<br>");
+                                    overlay2d.setPosition(evt.coordinate);
+                                    popup2d.classList.remove("hidden");
+                                    shown = true;
+                                }
+                            });
+                        }
+                    }
+                }
+            });
+        });
+
+        let drawInteraction;
+        function activateMeasureTool(type) {
+            if (drawInteraction) map2d.removeInteraction(drawInteraction);
+            drawInteraction = new ol.interaction.Draw({
+                source: measurementSource,
+                type: type,
+                style: new ol.style.Style({
+                    stroke: new ol.style.Stroke({ color: '#ff0000', width: 3, lineDash: [10, 10] }),
+                    image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color: '#ff0000' }) })
+                })
+            });
+            drawInteraction.on('drawstart', () => {
+                document.getElementById('measurementDisplay').style.display = 'block';
+            });
+            drawInteraction.on('drawend', (event) => {
+                const geom = event.feature.getGeometry().clone();
+                geom.transform('EPSG:4326', 'EPSG:3857');
+                let res = '';
+                if (type === 'LineString') {
+                    const length = geom.getLength();
+                    res = length > 1000 ? (length / 1000).toFixed(2) + ' km' : Math.round(length) + ' m';
+                } else if (type === 'Polygon') {
+                    const area = geom.getArea();
+                    res = area > 1000000 ? (area / 1000000).toFixed(2) + ' km²' : Math.round(area) + ' m²';
+                }
+                document.getElementById('measurementText').innerHTML = `<strong>Résultat :</strong> ${res}`;
+                map2d.removeInteraction(drawInteraction);
+            });
+            map2d.addInteraction(drawInteraction);
+        }
+
+        function clearMeasurements() {
+            measurementSource.clear();
+            document.getElementById('measurementDisplay').style.display = 'none';
+            if (drawInteraction) {
+                map2d.removeInteraction(drawInteraction);
+                drawInteraction = null;
+            }
+        }
+
+        document.getElementById('measure-distance').addEventListener('click', () => {
+            activateMeasureTool('LineString');
+        });
+        document.getElementById('measure-area').addEventListener('click', () => {
+            activateMeasureTool('Polygon');
+        });
+
+        async function init3DMap() {
+            document.getElementById('loading-overlay').style.display = 'flex';
+            try {
+                Cesium.Ion.defaultAccessToken = config.cesiumToken;
+                let viewer = new Cesium.Viewer('map3d', {
+                    terrain: null, timeline: false, animation: true,
+                    baseLayerPicker: false, sceneModePicker: false,
+                    navigationHelpButton: false, homeButton: false,
+                    geocoder: false, infoBox: false, selectionIndicator: false
+                });
+                try {
+                    const tileset = await Cesium.Cesium3DTileset.fromUrl('./tileset.json', {
+                        maximumScreenSpaceError: 16,
+                        maximumNumberOfLoadedTiles: 10000,
+                        skipLevelOfDetail: true
+                    });
+                    viewer.scene.primitives.add(tileset);
+                    viewer.zoomTo(tileset);
+                } catch {
+                    viewer.imageryLayers.addImageryProvider(new Cesium.WebMapServiceImageryProvider({
+                        url: config.geoserverUrl,
+                        layers: config.layers[0],
+                        parameters: { transparent: true, format: 'image/png' },
+                        credit: 'GeoServer WMS'
+                    }));
+                    viewer.camera.flyTo({
+                        destination: Cesium.Rectangle.fromDegrees(...config.bbox),
+                        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-45), roll: 0 }
+                    });
+                }
+            } catch (error) {
+                console.error('Erreur Cesium :', error);
+                alert('Erreur lors du chargement de la vue 3D.');
+            } finally {
+                document.getElementById('loading-overlay').style.display = 'none';
+            }
+        }
+
+        init3DMap();
+
+        document.getElementById("export-png").addEventListener("click", () => {
+            map2d.once("rendercomplete", () => {
+                const canvas = document.createElement("canvas");
+                const size = map2d.getSize();
+                canvas.width = size[0];
+                canvas.height = size[1];
+                const context = canvas.getContext("2d");
+
+                Array.prototype.forEach.call(
+                    map2d.getViewport().querySelectorAll(".ol-layer canvas"),
+                    (layerCanvas) => {
+                        if (layerCanvas.width > 0) {
+                            context.drawImage(layerCanvas, 0, 0);
+                        }
+                    }
+                );
+
+                const link = document.createElement("a");
+                link.href = canvas.toDataURL("image/png");
+                link.download = "carte_sig_ehtp.png";
+                link.click();
+            });
+            map2d.renderSync();
+        });
+
+        document.getElementById("export-pdf").addEventListener("click", async () => {
+            map2d.once("rendercomplete", () => {
+                const canvas = document.createElement("canvas");
+                const size = map2d.getSize();
+                canvas.width = size[0];
+                canvas.height = size[1];
+                const context = canvas.getContext("2d");
+
+                Array.prototype.forEach.call(
+                    map2d.getViewport().querySelectorAll(".ol-layer canvas"),
+                    (layerCanvas) => {
+                        if (layerCanvas.width > 0) {
+                            context.drawImage(layerCanvas, 0, 0);
+                        }
+                    }
+                );
+
+                const imageData = canvas.toDataURL("image/jpeg", 1.0);
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({ orientation: "landscape" });
+                pdf.addImage(imageData, "JPEG", 10, 10, 270, 180);
+                pdf.save("carte_sig_ehtp.pdf");
+            });
+            map2d.renderSync();
+        });
+
+        document.getElementById("export-geojson").addEventListener("click", () => {
+            const features = measurementSource.getFeatures();
+            const geojson = new ol.format.GeoJSON().writeFeatures(features);
+            const blob = new Blob([geojson], { type: "application/json" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "mesures.geojson";
+            link.click();
+        });
+
+        document.getElementById("export-shp").addEventListener("click", () => {
+            const features = measurementSource.getFeatures();
+            const geojson = new ol.format.GeoJSON().writeFeaturesObject(features);
+            shpwrite.download(geojson, {
+                folder: "mesures",
+                types: { point: "points", polygon: "polygones", line: "lignes" }
+            });
+        });
+
+
+        // === Couche résultat requête ===
+        const resultSource = new ol.source.Vector();
+        const resultLayer = new ol.layer.Vector({
+            source: resultSource,
+            style: new ol.style.Style({
+                stroke: new ol.style.Stroke({ color: 'orange', width: 3 }),
+                fill: new ol.style.Fill({ color: 'rgba(255,165,0,0.2)' })
+            })
+        });
+        map2d.addLayer(resultLayer);
+
+        // === Requête attributaire ===
+        document.getElementById('search-btn').addEventListener('click', () => {
+            const value = document.getElementById('search-input').value.trim();
+            if (!value) return;
+
+            const url = `${config.geoserverUrl.replace('/wms', '/wfs')}?service=WFS&version=1.1.0&request=GetFeature&typeName=ehtp:Batiments&outputFormat=application/json&CQL_FILTER=Nom ILIKE '%25${value}%25'`;
+
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    const format = new ol.format.GeoJSON();
+                    const features = format.readFeatures(data, {
+                        featureProjection: config.projection
+                    });
+                    resultSource.clear();
+                    resultSource.addFeatures(features);
+                    if (features.length > 0) {
+                        const extent = resultSource.getExtent();
+                        map2d.getView().fit(extent, { duration: 1000 });
+                    } else {
+                        alert("Aucun résultat trouvé.");
+                    }
+                });
+        });
+
+        // === Requête spatiale ===
+        let spatialDraw;
+
+        document.getElementById('spatial-query-btn').addEventListener('click', () => {
+            if (spatialDraw) map2d.removeInteraction(spatialDraw);
+
+            spatialDraw = new ol.interaction.Draw({
+                source: new ol.source.Vector(),
+                type: 'Polygon'
+            });
+
+            map2d.addInteraction(spatialDraw);
+
+            spatialDraw.on('drawend', (e) => {
+                map2d.removeInteraction(spatialDraw);
+                const geom = e.feature.getGeometry().clone().transform(config.projection, 'EPSG:4326');
+                const wkt = new ol.format.WKT().writeGeometry(geom);
+
+                const url = `${config.geoserverUrl.replace('/wms', '/wfs')}?service=WFS&version=1.1.0&request=GetFeature&typeName=ehtp:Batiments&outputFormat=application/json&CQL_FILTER=INTERSECTS(geometry, ${wkt})`;
+
+                fetch(url)
+                    .then(res => res.json())
+                    .then(data => {
+                        const format = new ol.format.GeoJSON();
+                        const features = format.readFeatures(data, {
+                            featureProjection: config.projection
+                        });
+                        resultSource.clear();
+                        resultSource.addFeatures(features);
+                        if (features.length > 0) {
+                            const extent = resultSource.getExtent();
+                            map2d.getView().fit(extent, { duration: 1000 });
+                        } else {
+                            alert("Aucun objet trouvé.");
+                        }
+                    });
+            });
+        });
+
+    </script>
+
+    <script>
+        const nameSelect = document.createElement('select');
+        nameSelect.id = 'name-select';
+        nameSelect.innerHTML = '<option value="">-- Sélectionner un nom --</option>';
+        document.getElementById('search-input').replaceWith(nameSelect);
+
+        // Mettre à jour la liste des noms à chaque changement de couche
+        document.getElementById('layer-select').addEventListener('change', () => {
+            const layer = document.getElementById('layer-select').value;
+            nameSelect.innerHTML = '<option value="">Chargement...</option>';
+
+            const url = `${config.geoserverUrl.replace('/wms', '/wfs')}?service=WFS&version=1.1.0&request=GetFeature&typeName=ehtp:${layer}&outputFormat=application/json&propertyName=Nom`;
+
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    const noms = new Set();
+                    data.features.forEach(f => {
+                        if (f.properties && f.properties.Nom) noms.add(f.properties.Nom);
+                    });
+
+                    nameSelect.innerHTML = '<option value="">-- Sélectionner un nom --</option>';
+                    Array.from(noms).sort().forEach(nom => {
+                        const option = document.createElement('option');
+                        option.value = nom;
+                        option.textContent = nom;
+                        nameSelect.appendChild(option);
+                    });
+                })
+                .catch(err => {
+                    nameSelect.innerHTML = '<option value="">Erreur chargement</option>';
+                    console.error('Erreur chargement noms :', err);
+                });
+        });
+
+        // Modifier la requête attributaire pour utiliser le nom sélectionné
+        document.getElementById('search-btn').addEventListener('click', () => {
+            const layer = document.getElementById('layer-select').value;
+            const nom = nameSelect.value;
+            if (!layer || !nom) return;
+
+            const url = `${config.geoserverUrl.replace('/wms', '/wfs')}?service=WFS&version=1.1.0&request=GetFeature&typeName=ehtp:${layer}&outputFormat=application/json&CQL_FILTER=Nom='${nom}'`;
+
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    const format = new ol.format.GeoJSON();
+                    const features = format.readFeatures(data, {
+                        featureProjection: config.projection
+                    });
+                    resultSource.clear();
+                    resultSource.addFeatures(features);
+                    if (features.length > 0) {
+                        const extent = resultSource.getExtent();
+                        map2d.getView().fit(extent, { duration: 1000 });
+                    } else {
+                        alert("Aucun résultat trouvé.");
+                    }
+                })
+                .catch(error => {
+                    console.error("Erreur requête attributaire :", error);
+                    alert("Erreur pendant la requête.");
+                });
+        });
+    </script>
+
+</body>
+
+</html>

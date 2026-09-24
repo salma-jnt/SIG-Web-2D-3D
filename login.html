@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Connexion - SIG EHTP</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #4f46e5;
+            --secondary-color: #7c3aed;
+            --background: linear-gradient(135deg, #e0e7ff, #ede9fe);
+            --input-bg: #f9fafb;
+            --border: #d1d5db;
+            --text-dark: #1f2937;
+            --button-gradient: linear-gradient(135deg, #6366f1, #8b5cf6);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--background);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .header-title {
+            font-size: 2.4rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            text-align: center;
+            margin-bottom: 2rem;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        form {
+            background: white;
+            padding: 2rem 2.5rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        h2 {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            color: var(--text-dark);
+            font-size: 1.6rem;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            background-color: var(--input-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            transition: border 0.2s;
+        }
+
+        input:focus {
+            border-color: var(--primary-color);
+            outline: none;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            background: var(--button-gradient);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+
+        button:hover {
+            background: linear-gradient(135deg, #4338ca, #6d28d9);
+        }
+
+        a {
+            display: block;
+            margin-top: 1rem;
+            text-align: center;
+            color: var(--primary-color);
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 500px) {
+            .header-title {
+                font-size: 1.8rem;
+            }
+
+            form {
+                padding: 1.5rem;
+                border-radius: 12px;
+            }
+
+            h2 {
+                font-size: 1.4rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header-title">Geoportail SIG Web 2D/3D de l’EHTP</div>
+
+    <form id="loginForm">
+        <h2>Connexion</h2>
+        <input type="text" id="username" placeholder="Nom d'utilisateur" required />
+        <input type="password" id="password" placeholder="Mot de passe" required />
+        <button type="submit">Se connecter</button>
+        <a href="register.html">Créer un compte</a>
+    </form>
+
+    <script src="auth.js"></script>
+</body>
+
+</html>
